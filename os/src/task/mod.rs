@@ -22,6 +22,7 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+use crate::timer::get_time;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -54,6 +55,9 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            start_time: 0,
+            time: 0,
+            syscall_times: [0;500],
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -90,6 +94,39 @@ impl TaskManager {
         panic!("unreachable in run_first_task!");
     }
 
+    // fn get_current_task_id(&self) -> usize{
+    //     let inner = self.inner.exclusive_access();
+    //     return  inner.current_task;
+    // }
+
+    fn current_task_syscall_times(&self) -> [u32; 500]{
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].syscall_times
+    }
+
+    fn current_task_time(&self) -> usize{
+        let inner = self.inner.exclusive_access();
+        get_time() - inner.tasks[inner.current_task].start_time
+    }
+
+    fn current_task_status(&self) -> TaskStatus{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_status
+    }
+
+    fn add_current_task_syscall_times(&self, syscall_id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id] += 1
+    }
+
+    // fn add_current_task_time(&self, t:usize){
+    //     let mut inner = self.inner.exclusive_access();
+    //     let current = inner.current_task;
+    //     inner.tasks[current].time += t
+    // }
+
     /// Change the status of current `Running` task into `Ready`.
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
@@ -121,6 +158,9 @@ impl TaskManager {
         if let Some(next) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
+            if inner.tasks[next].start_time == 0{
+                inner.tasks[next].start_time = get_time()
+            }
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
@@ -168,4 +208,24 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+/// add_current_task_syscall_times
+pub fn add_current_task_syscall_times(syscall_id:usize) {
+    TASK_MANAGER.add_current_task_syscall_times(syscall_id)
+}
+
+/// current_task_syscall_times
+pub fn current_task_syscall_times() ->[u32; 500]{
+    TASK_MANAGER.current_task_syscall_times()
+}
+
+/// current_task_time
+pub fn current_task_time() -> usize{
+    TASK_MANAGER.current_task_time()
+}
+
+/// current_task_status
+pub fn current_task_status() -> TaskStatus{
+    TASK_MANAGER.current_task_status()
 }
