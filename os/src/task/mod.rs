@@ -22,7 +22,7 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-use crate::timer::get_time;
+use crate::timer::{ get_time_us};
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -106,7 +106,7 @@ impl TaskManager {
 
     fn current_task_time(&self) -> usize{
         let inner = self.inner.exclusive_access();
-        get_time() - inner.tasks[inner.current_task].start_time
+        get_time_us() - inner.tasks[inner.current_task].start_time
     }
 
     fn current_task_status(&self) -> TaskStatus{
@@ -159,7 +159,7 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             if inner.tasks[next].start_time == 0{
-                inner.tasks[next].start_time = get_time()
+                inner.tasks[next].start_time = get_time_us()
             }
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;

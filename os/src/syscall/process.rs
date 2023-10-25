@@ -4,7 +4,8 @@ use crate::{
     task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus},
     timer::get_time_us,
 };
-use crate::task::{current_task_syscall_times, current_task_time, current_task_status};
+use crate::syscall::{SYSCALL_EXIT, SYSCALL_GET_TIME, SYSCALL_TASK_INFO, SYSCALL_YIELD};
+use crate::task::{current_task_syscall_times, current_task_time, current_task_status, add_current_task_syscall_times};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -27,6 +28,7 @@ pub struct TaskInfo {
 /// task exits and submit an exit code
 pub fn sys_exit(exit_code: i32) -> ! {
     trace!("[kernel] Application exited with code {}", exit_code);
+    add_current_task_syscall_times(SYSCALL_EXIT);
     exit_current_and_run_next();
     panic!("Unreachable in sys_exit!");
 }
@@ -34,6 +36,7 @@ pub fn sys_exit(exit_code: i32) -> ! {
 /// current task gives up resources for other tasks
 pub fn sys_yield() -> isize {
     trace!("kernel: sys_yield");
+    add_current_task_syscall_times(SYSCALL_YIELD);
     suspend_current_and_run_next();
     0
 }
@@ -41,6 +44,7 @@ pub fn sys_yield() -> isize {
 /// get time with second and microsecond
 pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
+    add_current_task_syscall_times(SYSCALL_GET_TIME);
     let us = get_time_us();
     unsafe {
         *ts = TimeVal {
@@ -54,6 +58,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 /// YOUR JOB: Finish sys_task_info to pass testcases
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
+    add_current_task_syscall_times(SYSCALL_TASK_INFO);
     unsafe {
         (*_ti).time = current_task_time()/1000;
         (*_ti).status = current_task_status();
