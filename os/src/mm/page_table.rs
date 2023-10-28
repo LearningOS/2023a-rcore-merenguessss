@@ -4,6 +4,7 @@ use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPag
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use crate::mm::PhysAddr;
 
 bitflags! {
     /// page table entry flags
@@ -143,6 +144,15 @@ impl PageTable {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.find_pte(vpn).map(|pte| *pte)
     }
+
+    pub fn trasnlate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.find_pte(va.floor()).map(
+            |pte|{
+                let addr = PhysAddr::from(pte.ppn());
+                (addr.0 | va.page_offset()).into()
+            }
+        )
+    }
     /// get the token from the page table
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
@@ -170,4 +180,11 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// translated_ptr
+pub fn translated_ptr<T>(token: usize, ptr: *mut T) -> &'static mut T {
+    let page_table = PageTable::from_token(token);
+    let ptr_va = VirtAddr::from(ptr as usize);
+    page_table.trasnlate_va(ptr_va).unwrap().get_mut()
 }

@@ -1,4 +1,4 @@
-DOCKER_NAME ?= rcore-tutorial-v3
+DOCKER_NAME ?= merenguess
 .PHONY: docker build_docker
 	
 docker:
