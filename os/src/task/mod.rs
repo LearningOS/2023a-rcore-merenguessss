@@ -23,6 +23,9 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+use crate::config::{MAX_SYSCALL_NUM, PAGE_SIZE};
+use crate::mm::{MapPermission, valid_va_mapped, valid_va_nomap, VirtAddr};
+use crate::timer::{get_time_us};
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -89,6 +92,79 @@ impl TaskManager {
         panic!("unreachable in run_first_task!");
     }
 
+    fn munmap(&self, start: usize, len: usize)->isize{
+        if len == 0 {
+            return 0;
+        }
+        if start % PAGE_SIZE != 0 {
+            return -1;
+        }
+
+        let start_va= VirtAddr::from(start).floor();
+        let end_va = VirtAddr::from(start+len).ceil();
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        warn!("munmap:{},[{:?},{:?}]", cur, start_va, end_va);
+        if valid_va_nomap(inner.tasks[cur].get_user_token(),start_va, end_va){
+            warn!("cur:{},valid_va [{:?},{:?}]",cur, start_va,end_va);
+            return -1;
+        }
+        inner.tasks[cur].memory_set.unmap(start_va,end_va);
+        debug!("done munmap:{},[{:?},{:?}]", cur, start_va, end_va);
+        return 0;
+    }
+
+    fn mmap(&self, start: usize, len: usize, prot: usize) -> isize{
+        // debug!("[{:?},{:?}],length:{:?}",start,len+start, len);
+        if len == 0 {
+            return 0;
+        }
+        if start%PAGE_SIZE != 0 || prot & !0x7 != 0 || prot & 0x7 == 0{
+            return -1
+        }
+
+        let start_va= VirtAddr::from(start).floor();
+        let end_va = VirtAddr::from(start+len).ceil();
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        warn!("mmap cur:{},[{:?},{:?}]", cur, start_va, end_va);
+
+        if valid_va_mapped(inner.tasks[cur].get_user_token(),start_va, end_va){
+            // warn!("valid_va [{:?},{:?}]", start_va,end_va);
+            return -1;
+        }
+        let p = prot << 1;
+        let m = MapPermission::from_bits(p as u8).unwrap();
+        inner.tasks[cur].memory_set.
+            insert_framed_area(
+                start_va.into(),end_va.into(),m);
+        0
+    }
+
+    fn incr_syscall(&self, syscall_id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].syscall_counter.incr(syscall_id);
+    }
+
+    fn get_syscall_times(&self) -> [u32;MAX_SYSCALL_NUM]{
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].syscall_counter.syscall_times
+    }
+
+    fn get_task_status(&self) -> TaskStatus {
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].task_status
+    }
+
+    fn total_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        (get_time_us() - inner.tasks[cur].time)/1000
+    }
+
     /// Change the status of current `Running` task into `Ready`.
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
@@ -141,6 +217,9 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+            if inner.tasks[current].time == 0{
+                inner.tasks[current].time = get_time_us()
+            }
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
             drop(inner);
@@ -201,4 +280,34 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// xxx
+pub fn total_time() -> usize {
+    TASK_MANAGER.total_time()
+}
+
+/// xxx
+pub fn task_status() -> TaskStatus {
+    TASK_MANAGER.get_task_status()
+}
+
+/// xxx
+pub fn incr_syscall_times(syscall_id : usize) {
+    TASK_MANAGER.incr_syscall(syscall_id)
+}
+
+/// xxx
+pub fn get_syscall_times() -> [u32;MAX_SYSCALL_NUM] {
+    TASK_MANAGER.get_syscall_times()
+}
+
+/// xxx
+pub fn mmap(start: usize, len: usize, prot: usize) -> isize{
+    TASK_MANAGER.mmap(start,len,prot)
+}
+
+/// xxx
+pub fn munmap(start: usize, len: usize) -> isize{
+    TASK_MANAGER.munmap(start, len)
 }

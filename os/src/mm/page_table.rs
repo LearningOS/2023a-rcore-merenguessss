@@ -51,6 +51,10 @@ impl PageTableEntry {
     pub fn is_valid(&self) -> bool {
         (self.flags() & PTEFlags::V) != PTEFlags::empty()
     }
+    /// xxx
+    pub fn is_used(&self) -> bool{
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
     /// The page pointered by page table entry is readable?
     pub fn readable(&self) -> bool {
         (self.flags() & PTEFlags::R) != PTEFlags::empty()
@@ -136,6 +140,7 @@ impl PageTable {
     /// remove the map between virtual page number and physical page number
     #[allow(unused)]
     pub fn unmap(&mut self, vpn: VirtPageNum) {
+        warn!("unmap:{:?}",vpn);
         let pte = self.find_pte(vpn).unwrap();
         assert!(pte.is_valid(), "vpn {:?} is invalid before unmapping", vpn);
         *pte = PageTableEntry::empty();
@@ -187,4 +192,40 @@ pub fn translated_ptr<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
     let ptr_va = VirtAddr::from(ptr as usize);
     page_table.trasnlate_va(ptr_va).unwrap().get_mut()
+}
+
+/// xx
+pub fn valid_va_nomap(token: usize, start: VirtPageNum, end:VirtPageNum) -> bool{
+    let page_table = PageTable::from_token(token);
+    let mut p = start;
+
+    while p < end {
+        debug!("valid_nomap {:?},[{:?},{:?}]", p, start, end);
+        if let Some(pte) = page_table.find_pte(p){
+            debug!("valid_nomap_pte {:?},{:?},[{:?},{:?}]", p, pte.is_valid(), start, end);
+            if !pte.is_valid() {
+                return true
+            }
+        }
+        p.step();
+    };
+    return false;
+}
+
+/// xx
+pub fn valid_va_mapped(token: usize, start: VirtPageNum, end:VirtPageNum) -> bool{
+    let page_table = PageTable::from_token(token);
+    let mut p = start;
+
+    while p < end {
+        // debug!("valid {:?},[{:?},{:?}]", p, start, end);
+        if let Some(pte) = page_table.find_pte(p){
+            // debug!("valid_pte {:?},{:?},[{:?},{:?}]", p, pte.is_valid(), start, end);
+            if pte.is_valid(){
+                return true
+            }
+        }
+        p.step();
+    };
+    return false;
 }

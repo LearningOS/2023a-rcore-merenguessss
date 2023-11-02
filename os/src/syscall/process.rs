@@ -5,7 +5,7 @@ use crate::{
         change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,
     },
 };
-use crate::task::current_user_token;
+use crate::task::{current_user_token, get_syscall_times, mmap, munmap, task_status, total_time};
 use crate::mm::translated_ptr;
 use crate::timer::get_time_us;
 
@@ -63,19 +63,27 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    -1
+    let new_ti: *mut TaskInfo = translated_ptr(current_user_token(), _ti);
+    unsafe {
+        *new_ti = TaskInfo{
+            status: task_status(),
+            syscall_times: get_syscall_times(),
+            time: total_time(),
+        };
+    }
+    0
 }
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    return mmap(_start,_len,_port);
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    return munmap(_start, _len)
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {

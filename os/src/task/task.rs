@@ -1,6 +1,7 @@
 //! Types related to task management
+use alloc::boxed::Box;
 use super::TaskContext;
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
@@ -28,6 +29,12 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Total running time of task
+    pub time: usize,
+
+    /// xxx
+    pub syscall_counter: Box<SyscallCounter>,
 }
 
 impl TaskControlBlock {
@@ -63,6 +70,10 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            syscall_counter: Box::new(SyscallCounter{
+                syscall_times:[0;MAX_SYSCALL_NUM],
+            }),
+            time: 0,
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
@@ -109,4 +120,17 @@ pub enum TaskStatus {
     Running,
     /// exited
     Exited,
+}
+
+/// xxx
+pub struct SyscallCounter {
+    /// xxx
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+}
+
+impl SyscallCounter {
+    /// xx
+    pub fn incr(&mut self, syscall_id:usize) {
+        self.syscall_times[syscall_id] += 1
+    }
 }

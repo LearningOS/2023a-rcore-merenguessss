@@ -63,6 +63,23 @@ impl MemorySet {
             None,
         );
     }
+    /// xxx
+    pub fn unmap(
+        &mut self,
+        start_va: VirtPageNum,
+        end_va: VirtPageNum
+    ){
+        let mut remove_idx = 0;
+        for (index, area) in self.areas.iter_mut().enumerate() {
+            if area.vpn_range.get_start() == start_va && area.vpn_range.get_end() == end_va {
+                area.unmap(&mut self.page_table);
+                remove_idx = index;
+                break
+            }
+        }
+
+        self.areas.remove(remove_idx);
+    }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -141,6 +158,7 @@ impl MemorySet {
             ),
             None,
         );
+        info!("mapping over");
         memory_set
     }
     /// Include sections in elf and trampoline and TrapContext and user stack,
