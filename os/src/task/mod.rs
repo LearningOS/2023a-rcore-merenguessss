@@ -130,10 +130,10 @@ impl TaskManager {
         warn!("mmap cur:{},[{:?},{:?}]", cur, start_va, end_va);
 
         if valid_va_mapped(inner.tasks[cur].get_user_token(),start_va, end_va){
-            // warn!("valid_va [{:?},{:?}]", start_va,end_va);
+            warn!("valid_va [{:?},{:?}]", start_va,end_va);
             return -1;
         }
-        let p = prot << 1;
+        let p = prot << 1 | 16;
         let m = MapPermission::from_bits(p as u8).unwrap();
         inner.tasks[cur].memory_set.
             insert_framed_area(
